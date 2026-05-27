@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Minesweeper Mobile</title>
+  <style>
+    :root {
+      --bg: #f0f2f5;
+      --cell-bg: #c0c0c0;
+      --cell-revealed: #e0e0e0;
+      --border-light: #ffffff;
+      --border-dark: #808080;
+      --accent: #4a90e2;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      touch-action: manipulation;
+      overflow: hidden;
+      padding: 8px;
+    }
+
+    .game-container {
+      background: #fff;
+      padding: 12px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      text-align: center;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    h1 { 
+      margin-bottom: 10px; 
+      color: #333; 
+      font-size: 1.5rem; 
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 12px;
+      padding: 8px;
+      background: #e9ecef;
+      border-radius: 8px;
+      flex-wrap: nowrap;
+    }
+
+    .counter {
+      font-family: 'Courier New', monospace;
+      font-size: 18px;
+      font-weight: bold;
+      color: #d32f2f;
+      background: #222;
+      padding: 6px 8px;
+      border-radius: 6px;
+      min-width: 60px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .btn {
+      border: none;
+      background: var(--accent);
+      color: white;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+      -webkit-user-select: none;
+      user-select: none;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.95); background: #357abd; }
+    .btn.flag-active { background: #d32f2f; }
+
+    #reset-btn { 
+      font-size: 22px; 
+      padding: 6px 8px; 
+      background: none; 
+      border-radius: 8px;
+      min-width: 44px;
+    }
+    #reset-btn:active { background: #e9ecef; }
+    
+    #mute-btn { 
+      background: none; 
+      color: #333; 
+      padding: 6px; 
+      font-size: 20px;
+      min-width: 36px;
+    }
+    #mute-btn.muted { opacity: 0.5; }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      gap: 2px;
+      background: #888;
+      padding: 3px;
+      border-radius: 6px;
+      margin: 0 auto;
+    }
+
+    .cell {
+      aspect-ratio: 1 / 1;
+      background: var(--cell-bg);
+      border-top: 3px solid var(--border-light);
+      border-left: 3px solid var(--border-light);
+      border-bottom: 3px solid var(--border-dark);
+      border-right: 3px solid var(--border-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: clamp(12px, 3.5vw, 16px);
+      cursor: pointer;
+      touch-action: manipulation;
+      position: relative;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .cell:active:not(.revealed) { background: #b0b0b0; }
+    .cell.revealed {
+      background: var(--cell-revealed);
+      border: 1px solid #bbb;
+      cursor: default;
+    }
+    .cell.mine { background: #ff4d4d; }
+    .cell.flag::after { content: '🚩'; font-size: clamp(14px, 4vw, 18px); }
+    .cell.mine::after { content: '💣'; }
+
+    .num-1 { color: #1976d2; }
+    .num-2 { color: #388e3c; }
+    .num-3 { color: #d32f2f; }
+    .num-4 { color: #7b1fa2; }
+    .num-5 { color: #ff8f00; }
+    .num-6 { color: #0097a7; }
+    .num-7 { color: #333; }
+    .num-8 { color: #757575; }
+
+    #status {
+      margin-top: 10px;
+      font-weight: bold;
+      height: 20px;
+      color: #555;
+      font-size: 0.95rem;
+    }
+
+    .win { color: #388e3c; }
+    .lose { color: #d32f2f; }
+
+    .hint { 
+      font-size: 0.7rem; 
+      color: #666; 
+      margin-top: 8px;
+      line-height: 1.3;
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <h1>💣 Minesweeper</h1>
+    <div class="header">
+      <div class="counter" id="mine-count">💣 10</div>
+      <button id="reset-btn">😊</button>
+      <button class="btn" id="mode-btn">👆 Reveal</button>
+      <button id="mute-btn">🔊</button>
+      <div class="counter" id="timer">⏱️ 000</div>
+    </div>
+    <div id="grid"></div>
+    <div id="status"></div>
+    <div class="hint">Tap to reveal • Long-press to flag 🚩</div>
+  </div>
+
+  <script>
+    // 🔊 Audio Manager (Web Audio API)
+    let audioCtx = null;
+    let isMuted = false;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    document.addEventListener('touchstart', initAudio, { once: true });
+    document.addEventListener('click', initAudio, { once: true });
+
+    function playSound(type) {
+      if (isMuted || !audioCtx) return;
+      const now = audioCtx.currentTime;
+      const masterGain = audioCtx.createGain();
+      masterGain.connect(audioCtx.destination);
+
+      if (type === 'click') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(900, now);
+        osc.frequency.exponentialRampToValueAtTime(400, now + 0.05);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        osc.connect(gain).connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 0.06);
+      } 
+      else if (type === 'flag') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(650, now);
+        osc.frequency.exponentialRampToValueAtTime(850, now + 0.07);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.connect(gain).connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      } 
+      else if (type === 'explode') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(120, now);
+        osc.frequency.exponentialRampToValueAtTime(20, now + 0.3);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.connect(gain).connect(masterGain);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } 
+      else if (type === 'win') {
+        [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.2, now + i * 0.12);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.2);
+          osc.connect(gain).connect(masterGain);
+          osc.start(now + i * 0.12);
+          osc.stop(now + i * 0.12 + 0.2);
+        });
+      }
+    }
+
+    // 🎮 Game Logic
+    const ROWS = 9, COLS = 9, MINES = 10;
+    let board = [], gameActive = false, firstClick = true;
+    let timer = null, seconds = 0, flagsPlaced = 0;
+    let isFlagMode = false;
+    let wasLongPress = false;
+    let pressTimers = {};
+
+    const gridEl = document.getElementById('grid');
+    const mineCountEl = document.getElementById('mine-count');
+    const timerEl = document.getElementById('timer');
+    const resetBtn = document.getElementById('reset-btn');
+    const statusEl = document.getElementById('status');
+    const modeBtn = document.getElementById('mode-btn');
+    const muteBtn = document.getElementById('mute-btn');
+
+    function initGame() {
+      clearInterval(timer);
+      seconds = 0; flagsPlaced = 0; firstClick = true;
+      gameActive = false; wasLongPress = false;
+      pressTimers = {};
+      timerEl.textContent = '⏱️ 000';
+      updateMineCounter();
+      statusEl.textContent = '';
+      statusEl.className = '';
+      resetBtn.textContent = '😊';
+      modeBtn.textContent = isFlagMode ? '🚩 Flag' : '👆 Reveal';
+      
+      board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+      renderGrid();
+    }
+
+    function renderGrid() {
+      gridEl.innerHTML = '';
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          board[r][c] = { isMine: false, isRevealed: false, isFlagged: false, adjacent: 0, el: cell };
+
+          cell.addEventListener('click', () => handleTap(r, c));
+          cell.addEventListener('touchstart', () => {
+            pressTimers[`${r},${c}`] = setTimeout(() => {
+              wasLongPress = true;
+              playSound('flag');
+              handleFlag(r, c);
+            }, 400);
+          }, { passive: true });
+
+          const clearTimer = () => {
+            Object.values(pressTimers).forEach(clearTimeout);
+            pressTimers = {};
+          };
+          cell.addEventListener('touchend', clearTimer, { passive: true });
+          cell.addEventListener('touchmove', clearTimer, { passive: true });
+          cell.addEventListener('touchcancel', clearTimer);
+          cell.addEventListener('contextmenu', e => e.preventDefault());
+
+          gridEl.appendChild(cell);
+        }
+      }
+    }
+
+    function handleTap(r, c) {
+      if (wasLongPress) { wasLongPress = false; return; }
+      if (board[r][c].isRevealed || board[r][c].isFlagged) return;
+
+      if (firstClick) {
+        placeMines(r, c);
+        firstClick = false;
+        gameActive = true;
+        startTimer();
+      } else if (!gameActive) {
+        return;
+      }
+
+      if (isFlagMode) {
+        handleFlag(r, c);
+      } else {
+        playSound('click');
+        revealCell(r, c);
+      }
+    }
+
+    function handleFlag(r, c) {
+      if (!gameActive && !firstClick) return;
+      if (board[r][c].isRevealed) return;
+      const cell = board[r][c].el;
+      
+      if (board[r][c].isFlagged) {
+        board[r][c].isFlagged = false;
+        cell.classList.remove('flag');
+        flagsPlaced--;
+      } else if (flagsPlaced < MINES) {
+        board[r][c].isFlagged = true;
+        cell.classList.add('flag');
+        flagsPlaced++;
+      }
+      updateMineCounter();
+    }
+
+    function placeMines(safeR, safeC) {
+      let placed = 0;
+      while (placed < MINES) {
+        const r = Math.floor(Math.random() * ROWS);
+        const c = Math.floor(Math.random() * COLS);
+        if (Math.abs(r - safeR) <= 1 && Math.abs(c - safeC) <= 1) continue;
+        if (!board[r][c].isMine) {
+          board[r][c].isMine = true;
+          placed++;
+        }
+      }
+      calculateNumbers();
+    }
+
+    function calculateNumbers() {
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (board[r][c].isMine) continue;
+          let count = 0;
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              const nr = r + dr, nc = c + dc;
+              if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].isMine) count++;
+            }
+          }
+          board[r][c].adjacent = count;
+        }
+      }
+    }
+
+    function revealCell(r, c) {
+      const cell = board[r][c].el;
+      if (board[r][c].isRevealed || board[r][c].isFlagged) return;
+
+      board[r][c].isRevealed = true;
+      cell.classList.add('revealed');
+
+      if (board[r][c].isMine) {
+        cell.classList.add('mine');
+        playSound('explode');
+        gameOver(false);
+        return;
+      }
+
+      if (board[r][c].adjacent > 0) {
+        cell.textContent = board[r][c].adjacent;
+        cell.classList.add(`num-${board[r][c].adjacent}`);
+      } else {
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) revealCell(nr, nc);
+          }
+        }
+      }
+      checkWin();
+    }
+
+    function checkWin() {
+      let revealedSafe = 0;
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (board[r][c].isRevealed && !board[r][c].isMine) revealedSafe++;
+        }
+      }
+      if (revealedSafe === (ROWS * COLS - MINES)) {
+        playSound('win');
+        gameOver(true);
+      }
+    }
+
+    function gameOver(isWin) {
+      gameActive = false;
+      clearInterval(timer);
+      resetBtn.textContent = isWin ? '😎' : '😵';
+      
+      if (isWin) {
+        statusEl.textContent = 'You Win! 🎉';
+        statusEl.classList.add('win');
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            if (board[r][c].isMine && !board[r][c].isFlagged) {
+              board[r][c].el.classList.add('flag');
+            }
+          }
+        }
+      } else {
+        statusEl.textContent = 'Game Over 💥';
+        statusEl.classList.add('lose');
+        for (let r = 0; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            if (board[r][c].isMine) {
+              board[r][c].el.classList.add('revealed', 'mine');
+            }
+          }
+        }
+      }
+    }
+
+    function startTimer() {
+      timer = setInterval(() => {
+        seconds++;
+        timerEl.textContent = `⏱️ ${String(seconds).padStart(3, '0')}`;
+        if (seconds >= 999) clearInterval(timer);
+      }, 1000);
+    }
+
+    function updateMineCounter() {
+      mineCountEl.textContent = `💣 ${MINES - flagsPlaced}`;
+    }
+
+    resetBtn.addEventListener('click', initGame);
+    modeBtn.addEventListener('click', () => {
+      isFlagMode = !isFlagMode;
+      modeBtn.textContent = isFlagMode ? '🚩 Flag' : '👆 Reveal';
+      modeBtn.classList.toggle('flag-active', isFlagMode);
+    });
+    muteBtn.addEventListener('click', () => {
+      isMuted = !isMuted;
+      muteBtn.textContent = isMuted ? '🔇' : '🔊';
+      muteBtn.classList.toggle('muted', isMuted);
+    });
+
+    initGame();
+  </script>
+</body>
+</html>
